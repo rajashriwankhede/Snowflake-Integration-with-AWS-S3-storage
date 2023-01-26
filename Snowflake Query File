@@ -1,0 +1,105 @@
+CREATE DATABASE DEMO;
+CREATE SCHEMA DEMO_26012022;
+
+-- Query to create storage integration
+CREATE OR REPLACE STORAGE INTEGRATION aws_s3_integration
+type = external_stage
+storage_provider='S3'
+enabled=true
+storage_aws_role_arn='arn:aws:iam::099703806641:role/demo_26012022'
+storage_allowed_locations=('s3://demo-26012022/');
+
+SHOW INTEGRATIONS;
+
+DESC integration aws_s3_integration;
+
+GRANT usage on integration asws_s3_integration 
+to role accountadmin;
+
+create or replace file format demo_format
+type='CSV'
+field_delimiter='|'
+skip_header=1;
+
+-- Query to create external stage
+create or replace stage demo_aws_stage
+storage_integration = aws_s3_integration
+file_format = demo_format
+url = 's3://demo-26012022/'
+
+List @demo_aws_stage;
+
+-- Remove file 
+remove @demo_aws_stage/customer_info.csv;
+
+-- Create temporary table for running session
+create or replace temporary table demo_customer_info (
+id integer,
+last_name string,
+first_name string,
+company string,
+email string,
+workphone string,
+cellphone string,
+streetaddress string,
+city string,
+postalcode string
+);
+
+select * from demo_customer_info limit 10;
+
+COPY INTO demo_customer_info
+from @demo_aws_stage/customer_info.csv
+file_format=(format_name=demo_format);
+
+-- Scenario 1
+-- Query to load all the files
+COPY INTO demo_customer_info
+from @demo_aws_stage/
+file_format=(format_name=demo_format);
+
+-- Scenario 2
+-- If error found then skip that particular file
+COPY INTO demo_customer_info
+from @demo_aws_stage/
+file_format=(format_name=demo_format)
+on_error='Skip_file'; --- Skip the whole file
+
+-- Scenario 3
+-- Skip the records which are bad
+COPY INTO demo_customer_info
+from @demo_aws_stage/
+file_format=(format_name=demo_format)
+on_error='Continue'; --- Skips the bad record and load
+rest of the record
+
+-- Scenario 4
+-- To kill process
+COPY INTO demo_customer_info
+from @demo_aws_stage/
+file_format=(format_name=demo_format)
+on_error='abort'; 
+
+-- Scenario 5
+-- Force COPY INTO command to load the data
+COPY INTO demo_customer_info
+from @demo_aws_stage/customer_info.csv
+file_format=(format_name=demo_format)
+force=true;
+
+List demo_aws_stage/customer_info.csv;
+
+select count(*) from demo_aws_stage;
+
+-- Scenario 6
+-- Remove file from stage
+Force COPY INTO command to load the data
+COPY INTO demo_customer_info
+from @demo_aws_stage/customer_info.csv
+file_format=(format_name=demo_format)
+force=true purge=true;
+
+
+
+
+
